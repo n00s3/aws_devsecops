@@ -17,7 +17,7 @@
 <br><br>
 
 # 개요
-누구나 쉽게 Cloud Development Kit을 사용해 간단한 All AWS DevOps 환경([아키텍처](#배포되는-클라우드-환경))을 위한 인프라와 파이프라인을 쉽게 배포한다.  
+누구나 쉽게 Cloud Development Kit을 사용해 간단한 All AWS DevOps 환경([아키텍처](#아키텍처))을 위한 인프라와 파이프라인을 쉽게 배포한다.  
 이 파이프라인 실습의 시나리오는 이미 배포되어있는 환경의 Blue(Flask)/Green(Flask)에서 Blue(ARX)/Green(Flask)으로 스왑되는 컨테이너 환경의 Blue/Green 배포 정책을 담고 있다.
 
 또한 파이프라인의 각 스테이지마다 슬랙을 통한 알림과 SCA, SAST, DAST 보고서를 받아 볼 수 있다.

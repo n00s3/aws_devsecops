@@ -16,7 +16,6 @@ import * as s3 from '@aws-cdk/aws-s3';
 import * as securityhub from '@aws-cdk/aws-securityhub';
 import * as guardduty from '@aws-cdk/aws-guardduty';
 
-
 export class CdkStackDevOps extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -35,7 +34,6 @@ export class CdkStackDevOps extends cdk.Stack {
       assumedBy: new iam.AccountRootPrincipal()
     });
 
-    const containerInsights = true;
     const cluster = new eks.Cluster(this, 'Cluster', {
       vpc,
       defaultCapacity: 2,
@@ -44,7 +42,9 @@ export class CdkStackDevOps extends cdk.Stack {
       outputClusterName: true,
     });
 
-    const ecrRepo = new ecr.Repository(this, 'EcrRepo');
+    const ecrRepo = new ecr.Repository(this, 'EcrRepo', {
+      imageScanOnPush: true
+    });
 
     const repository = new codecommit.Repository(this, 'CodeCommitRepo', {
       repositoryName: `${this.stackName}-repo`,
@@ -73,6 +73,45 @@ export class CdkStackDevOps extends cdk.Stack {
     // Guardduty 활성화
     // const sechub = new securityhub.CfnHub()
     // const guard = new guardduty.CfnDetector(this, "GuardDutyDetector", { enable: true })
+    
+    
+    
+    // CODEBUILD - projectOnCommit
+    const projectOnCommit = new codebuild.Project(this, 'MyProjectCommit', {
+      projectName: `${this.stackName}`,
+      source: codebuild.Source.codeCommit({ repository }),
+      environment: {
+        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2,
+        privileged: true
+      },
+      environmentVariables: {
+        'LAMBDA_FUNCTION_SLACK': {
+          value: `${fn_slack.functionName}`
+        }
+      },
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: "0.2",
+        phases: {
+          build: {
+            commands: [
+              'cp $CODEBUILD_SRC_DIR/lambda-functions/slack/event.json event.json',
+              'commitID=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-8)',
+              'titleA="CodeCommit-"',
+              'titleB=$(echo commitID:$commitID)',
+              'user=$CODEBUILD_INITIATOR',
+              'sed -i "s/example subject/$titleA$titleB/g" event.json',
+              'sed -i "s/test message/$user 사용자가 master 브랜치에 push 했습니다./g" event.json',
+              'aws lambda invoke --function-name $LAMBDA_FUNCTION_SLACK --payload file://event.json dependency-check-report.json  && echo "LAMBDA_SUCCEDED" || echo "LAMBDA_FAILED"',
+            ]
+          }
+        }
+      })
+    })
+    
+      
+    
+    
+    
     
     // CODEBUILD - projectSCA SCA
     const projectSCA = new codebuild.Project(this, 'MyProjectSCA', {
@@ -191,7 +230,7 @@ export class CdkStackDevOps extends cdk.Stack {
               "if [[ \"$isDeployed\" == \"null\" ]]; then kubectl apply -f k8s/devopsALBBlue.yaml && kubectl apply -f k8s/devopsALBGreen.yaml; else kubectl set image deployment/$deploy8080 -n devops-alb devops=$ECR_REPO_URI:$TAG; fi",
               'cp $CODEBUILD_SRC_DIR/lambda-functions/slack/event.json event.json',
               'titleA="BuildAndDeploy-"',
-              'titleB=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION)',
+              'titleB=$(echo $CODEBUILD_BUILD_ID | tr ":" "\n" | grep "-" | cut -c 1-8)',
               'sed -i "s/example subject/$titleA$titleB/g" event.json',
               'sed -i "s/test message/테스트 배포 성공/g" event.json',
               'aws lambda invoke --function-name $LAMBDA_FUNCTION_SLACK --payload file://event.json dependency-check-report.json  && echo "LAMBDA_SUCCEDED" || echo "LAMBDA_FAILED"',
@@ -285,7 +324,7 @@ export class CdkStackDevOps extends cdk.Stack {
               "kubectl patch svc devops-svc-alb-green -n devops-alb -p '{\"spec\":{\"selector\": {\"app\": \"'$deploy80'\"}}}'",
               'cp $CODEBUILD_SRC_DIR/lambda-functions/slack/event.json event.json',
               'titleA="SWAP-"',
-              'titleB=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION)',
+              'titleB=$(echo $CODEBUILD_BUILD_ID | tr ":" "\n" | grep "-" | cut -c 1-8)',
               'sed -i "s/example subject/$titleA$titleB/g" event.json',
               'sed -i "s/test message/정식 배포 성공/g" event.json',
               'aws lambda invoke --function-name $LAMBDA_FUNCTION_SLACK --payload file://event.json dependency-check-report.json  && echo "LAMBDA_SUCCEDED" || echo "LAMBDA_FAILED"',
@@ -383,10 +422,13 @@ export class CdkStackDevOps extends cdk.Stack {
         },
       ],
     });
+    
+    
 
 
     repository.onCommit('OnCommit', {
-      target: new targets.CodeBuildProject(codebuild.Project.fromProjectArn(this, 'OnCommitEvent', project.projectArn))
+      target: new targets.CodeBuildProject(codebuild.Project.fromProjectArn(this, 'OnCommitEvent', projectOnCommit.projectArn)),
+      branches: ['master']
     });
   
 
@@ -404,6 +446,7 @@ export class CdkStackDevOps extends cdk.Stack {
     fn_slack.grantInvoke(projectSCA.role!)
     fn_slack.grantInvoke(projectSAST.role!)
     fn_slack.grantInvoke(projectDAST.role!)
+    fn_slack.grantInvoke(projectOnCommit.role!)
 
     ecrRepo.grantPullPush(project.role!)
     cluster.awsAuth.addMastersRole(project.role!)
@@ -415,27 +458,6 @@ export class CdkStackDevOps extends cdk.Stack {
     ecrRepo.grantPullPush(project2.role!)
     cluster.awsAuth.addMastersRole(project2.role!)
     project2.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['eks:DescribeCluster'],
-      resources: [`${cluster.clusterArn}`],
-    }))
-
-    ecrRepo.grantPullPush(projectSCA.role!)
-    cluster.awsAuth.addMastersRole(projectSCA.role!)
-    projectSCA.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['eks:DescribeCluster'],
-      resources: [`${cluster.clusterArn}`],
-    }))
-
-    ecrRepo.grantPullPush(projectSAST.role!)
-    cluster.awsAuth.addMastersRole(projectSAST.role!)
-    projectSAST.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['eks:DescribeCluster'],
-      resources: [`${cluster.clusterArn}`],
-    }))
-    
-    ecrRepo.grantPullPush(projectDAST.role!)
-    cluster.awsAuth.addMastersRole(projectDAST.role!)
-    projectDAST.addToRolePolicy(new iam.PolicyStatement({
       actions: ['eks:DescribeCluster'],
       resources: [`${cluster.clusterArn}`],
     }))
