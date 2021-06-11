@@ -1,0 +1,41 @@
+{
+  "name": "web-arxaas",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": ".",
+  "dependencies": {
+    "bootstrap": "^4.3.1",
+    "browserslist": "4.6.2",
+    "caniuse-lite": "^1.0.30000974",
+    "jquery": "^3.4.1",
+    "papaparse": "^4.6.3",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "react-scripts": "^3.0.1",
+    "react-table": "^6.10.0",
+    "reactstrap": "^8.0.0",
+    "snyk": "^1.217.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
+  },
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not ie <= 11",
+    "not op_mini all"
+  ],
+  "resolutions": {
+    "browserslist": "4.6.2",
+    "caniuse-lite": "1.0.30000974"
+  },
+  "devDependencies": {
+    "browserslist": "4.6.2"
+  },
+  "snyk": true
+}

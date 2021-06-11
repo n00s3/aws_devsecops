@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: "devops-svc-alb-sonarqube"
+  namespace: "devops-alb"
+spec:
+  selector:
+    app: "devops-deploy-alb-sonarqube"
+  type: NodePort
+  ports:
+    - name: web
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: "devops"
+  name: "devops-deploy-alb-sonarqube"
+  namespace: "devops-alb"
+spec:
+  selector:
+    matchLabels:
+      app: "devops-deploy-alb-sonarqube"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "devops-deploy-alb-sonarqube"
+    spec:
+      containers:
+      - name: "devops"
+        image: public.ecr.aws/v3g6g4v7/devops:nginx
+        ports:
+          - containerPort: 9000
+        # command:
+        #   - "sh"
+        #   - "-c"
+        #   - "yum install -y python3-pip && tail -f /var/log/yum.log "
